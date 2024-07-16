@@ -3,16 +3,7 @@ import numpy as np
 from PIL import ImageFont, ImageDraw, Image
 import multiprocessing as mp
 import os
-from tkinter.messagebox import showerror, showinfo
-import tkinter as tk
-from tkinter import ttk
 
-directory = ""
-
-def safe_parametres():
-    global directory
-    directory = input_Entry.get()
-    showinfo(title="успешно", message="данные сохранены")
 
 def get_class_object(area, brigtness):
     return {
@@ -43,9 +34,8 @@ def detect_space_object(image, number, queue: mp.Queue)->None:
     contours, _ = cv2.findContours(binary_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     space_objects = []
-
-    font_path = "font/arialuni.ttf"
-    font = ImageFont.truetype(font_path, 14)
+    
+    font = ImageFont.load_default()
 
     for contour in contours:
         # Вычисление площади контура
@@ -87,6 +77,8 @@ def detect_space_object(image, number, queue: mp.Queue)->None:
 
     cv2.imwrite(f"image_crop/{number}.tif", image_with_objects)
 
+    if not is_error(f"image_result"):
+        os.makedirs("image_result")
     with open(f"image_result/{number}.txt", "w", encoding="utf-8") as file:
         for object in space_objects:
             file.write(f"Координаты: ({object['x']}, {object['y']}); Светимость: {object['brightness']}; Размер: {object['size']}; Тип: {object['type']}\n")
@@ -110,7 +102,7 @@ def split_image(image: np.ndarray, num_parts):
 # Функция для сохранения обработанных изображений в новую директорию
 def save_images(filtered_images, directory):
     name_file = os.listdir(directory)
-    if not os.path.exists(directory):
+    if not is_error(directory):
         os.makedirs(directory)
     for i, image in enumerate(filtered_images):
         filename = f"{name_file[i][:name_file[i].find('.')]}_new{name_file[i][name_file[i].find('.'):]}"
@@ -118,76 +110,7 @@ def save_images(filtered_images, directory):
         cv2.imwrite(filepath, image)
         
 def is_error(directory)->bool:
-    if not os.path.exists(directory):
-        showerror(title= "ошибка", message= "такой директории не существует")
-
-def main():
-    global directory
-    if is_error(directory):
-        return
-    
-    queue = mp.Queue()
-    # Загрузка изображения
-    image = cv2.imread(directory)
-    num_parts = 4
-    mp_parts = split_image(image, num_parts)
-    
-    Processes = []
-    number = 0
-    for mp_part in mp_parts:
-        number += 1
-        Process = mp.Process(target=detect_space_object, args=(mp_part, number, queue))
-        Process.start()
-        Processes.append(Process)
-        
-    sum_finish = 0
-    
-    image_parts = [0] * len(mp_parts)
-    
-    while sum_finish != len(Processes):
-        if not queue.empty():
-            sum_finish += 1
-            image_part = queue.get()
-            image_parts[image_part[1]] = image_part[0].copy()
-    
-    image_vstack = [image_parts[i] for i in range(0, num_parts ** 2, num_parts)]
-    
-    k = 0
-    for i in range(num_parts):
-        for j in range(1, num_parts):
-            image_vstack[i] = np.vstack([image_vstack[i], image_parts[j + k]])
-        k += num_parts
-    
-    image_with_objects = np.hstack(image_vstack)
-    
-    new_directory = directory[:directory.rfind("/")]
-    cv2.imwrite(f"{new_directory}/new_image.tif", image_with_objects)
-    showinfo(title="успешно", message="изображение обработано")
-
-# Пример использования функции
-if __name__ == "__main__":
-    root = tk.Tk()
-    root.title("поиск космических тел")
-    root.geometry('400x100')
-    root['background'] = "gray"
-    root.resizable(False, False)
-    
-    my_font = ("Arial", 16) 
-    style_frame = ttk.Style()
-    style_frame.configure("CustomFrame.TFrame", background="white")
-    style_Entry = ttk.Style()
-    style_Entry.configure("TEntry", padding=5, font=my_font, foreground="black", background="gray")
-    style_label = ttk.Style()
-    style_label.configure("TLabel", font=my_font, padding=10, foreground="white", background="gray")
-    
-    main_menu = tk.Menu()
-    main_menu.add_cascade(label="найти объекты", command=main)
-    main_menu.add_cascade(label="сохранить параметры", command = safe_parametres)
-    
-    input_label = ttk.Label(root, style="TLabel", text="Введите название директории")
-    input_label.pack()
-    input_Entry = ttk.Entry(root, justify="center", width=30, style="TEntry")
-    input_Entry.pack()
-    
-    root.config(menu=main_menu)
-    root.mainloop()
+    if not os.path.isdir(directory):
+        return False
+    else:
+        return True
